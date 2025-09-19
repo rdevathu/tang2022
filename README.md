@@ -160,20 +160,6 @@ Based on the Tang et al. 2022 paper, expected AUROC for ECG-only model is approx
 - ~16GB RAM for full dataset
 - ~10GB disk space for results
 
-## Citation
-
-If you use this implementation, please cite the original paper:
-
-```bibtex
-@article{tang2022machine,
-  title={Machine Learning–Enabled Multimodal Fusion of Intra-Atrial and Body Surface Signals in Prediction of Atrial Fibrillation Ablation Outcomes},
-  author={Tang, Kevin and others},
-  journal={Circulation: Arrhythmia and Electrophysiology},
-  year={2022},
-  publisher={American Heart Association}
-}
-```
-
 ## License
 
 This implementation is provided for research purposes. Please ensure compliance with your institution's data use policies when working with clinical ECG data.
