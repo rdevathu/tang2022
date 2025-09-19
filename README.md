@@ -9,8 +9,17 @@ This implementation provides a complete pipeline for predicting 1-year AF recurr
 - **Task**: Binary classification of 1-year AF recurrence after catheter ablation
 - **Input**: 12-lead ECG in sinus rhythm (all leads used, unlike paper's 8-lead approach)
 - **Architecture**: 1D CNN with 6 residual bottleneck blocks
-- **Training**: 10-fold stratified cross-validation with patient-level evaluation
+- **Training**: Both cross-validation evaluation and final model training approaches
 - **Metrics**: AUROC, sensitivity, specificity, accuracy, F1, Brier score, ECE
+
+## Training Approaches
+
+This repository supports two training methodologies:
+
+1. **Cross-Validation (Original)**: 10-fold stratified cross-validation for model evaluation and research
+2. **Final Model Training (Recommended)**: Proper train-test split to build an optimal deployable model
+
+For production deployment, use the **Final Model Training** approach which provides a single optimized model ready for use.
 
 ## Dataset Requirements
 
@@ -47,28 +56,65 @@ uv sync
 
 ## Usage
 
-### Quick Test Run
+### Final Model Training (Recommended for Production)
+
+Train a single optimized model for deployment:
+
 ```bash
+# Quick final model training
+python train_final_model.py --test-run
+
+# Full final model training with default settings
+python train_final_model.py
+
+# Custom final model training
+python train_final_model.py --test-size 0.2 --val-size 0.2 --epochs 150
+
+# Using configuration file
+python train_final_model.py --config config_final_model.json
+```
+
+Analyze the final model results:
+```bash
+# Comprehensive analysis with plots
+python analyze_final_model.py --results-dir final_model_results --save-plots
+
+# Summary only
+python analyze_final_model.py --summary-only
+```
+
+### Cross-Validation (Research/Evaluation)
+
+For model evaluation and research purposes:
+
+```bash
+# Quick test run
 python main.py --test-run
-```
-This runs a quick test with 2 folds and 3 epochs to verify everything works.
 
-### Full Experiment
-```bash
+# Full 10-fold cross-validation
 python main.py
-```
-This runs the complete 10-fold cross-validation with 100 epochs per fold.
 
-### Custom Configuration
+# Final model training via main script
+python main.py --final-model --test-size 0.2 --val-size 0.2
+```
+
+### Configuration Files
+
 ```bash
-# Create a configuration file
+# Create default cross-validation config
 python main.py --create-config
 
-# Edit config.json as needed, then run:
+# Create final model training config
+python train_final_model.py --create-config
+
+# Use custom configuration
 python main.py --config config.json
+python train_final_model.py --config config_final_model.json
 ```
 
 ### Configuration Options
+
+#### Cross-Validation Training
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -78,6 +124,20 @@ python main.py --config config.json
 | `n_epochs` | `100` | Maximum epochs per fold |
 | `batch_size` | `32` | Training batch size |
 | `learning_rate` | `0.001` | Adam learning rate |
+| `random_seed` | `42` | Random seed for reproducibility |
+
+#### Final Model Training
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `data_dir` | `"data"` | Directory containing CARTO dataset |
+| `results_dir` | `"final_model_results"` | Directory to save final model |
+| `test_size` | `0.2` | Fraction of data for test set |
+| `val_size` | `0.2` | Fraction of training data for validation |
+| `n_epochs` | `150` | Maximum training epochs |
+| `batch_size` | `32` | Training batch size |
+| `learning_rate` | `0.001` | Adam learning rate |
+| `patience` | `20` | Early stopping patience |
 | `random_seed` | `42` | Random seed for reproducibility |
 
 ## Architecture Details

@@ -1,0 +1,48 @@
+{
+  "data_dir": "data",
+  "results_dir": "final_model_results",
+  "n_epochs": 150,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "random_seed": 42,
+  "model_size": "base",
+  "patience": 20,
+  "test_size": 0.2,
+  "val_size": 0.2,
+  "training_mode": "final_model",
+  "description": "Optimized configuration for training final ECG AF recurrence prediction model",
+  "training_strategy": {
+    "early_stopping": true,
+    "patience": 20,
+    "monitor_metric": "val_auroc",
+    "save_best_only": true
+  },
+  "data_strategy": {
+    "stratified_split": true,
+    "maintain_patient_integrity": true,
+    "augmentation": true
+  },
+  "model_config": {
+    "input_channels": 8,
+    "architecture": "ECGNet",
+    "dropout": 0.2,
+    "batch_normalization": true
+  },
+  "optimization": {
+    "optimizer": "Adam",
+    "weight_decay": 0.0,
+    "scheduler": null,
+    "gradient_clipping": null
+  },
+  "evaluation": {
+    "primary_metric": "auroc",
+    "patient_level_aggregation": true,
+    "bootstrap_ci": false,
+    "calibration_analysis": true
+  },
+  "reproducibility": {
+    "deterministic": true,
+    "benchmark": false,
+    "seed_workers": true
+  }
+}

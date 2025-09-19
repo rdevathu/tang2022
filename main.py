@@ -22,7 +22,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from src.tang2022.carto_data_interface import load_carto_dataset
-from src.tang2022.training import run_cross_validation
+from src.tang2022.training import run_cross_validation, train_final_model
 
 
 def load_config(config_path: str = None) -> dict:
@@ -120,6 +120,26 @@ def main():
     )
 
     parser.add_argument(
+        "--final-model",
+        action="store_true",
+        help="Train final model with train-test split instead of cross-validation",
+    )
+
+    parser.add_argument(
+        "--test-size",
+        type=float,
+        default=0.2,
+        help="Fraction of data to hold out for final testing (when using --final-model)",
+    )
+
+    parser.add_argument(
+        "--val-size",
+        type=float,
+        default=0.2,
+        help="Fraction of training data to use for validation (when using --final-model)",
+    )
+
+    parser.add_argument(
         "--data-dir",
         type=str,
         default="data",
@@ -169,6 +189,10 @@ def main():
                 "results_dir": "test_results",
             }
         )
+        if args.final_model:
+            print(
+                "TEST MODE: Using final model training with reduced parameters"
+            )
 
     print("\nConfiguration:")
     for key, value in config.items():
@@ -190,33 +214,67 @@ def main():
         print(f"  Sampling rate: {stats['sampling_rate']} Hz")
         print()
 
-        # Run cross-validation
-        print("Starting cross-validation...")
-        results_df = run_cross_validation(
-            carto_dataset=carto_dataset,
-            n_folds=config["n_folds"],
-            n_epochs=config["n_epochs"],
-            batch_size=config["batch_size"],
-            learning_rate=config["learning_rate"],
-            results_dir=config["results_dir"],
-            random_seed=config["random_seed"],
-        )
+        if args.final_model:
+            # Train final model with proper train-test split
+            print("Starting final model training...")
+            final_results = train_final_model(
+                carto_dataset=carto_dataset,
+                test_size=args.test_size,
+                val_size=args.val_size,
+                n_epochs=config["n_epochs"],
+                batch_size=config["batch_size"],
+                learning_rate=config["learning_rate"],
+                results_dir=config["results_dir"],
+                random_seed=config["random_seed"],
+            )
 
-        # Save final configuration
-        config_save_path = Path(config["results_dir"]) / "final_config.json"
-        with open(config_save_path, "w") as f:
-            json.dump(config, f, indent=2)
+            # Save final configuration
+            config_save_path = Path(config["results_dir"]) / "final_config.json"
+            config["training_mode"] = "final_model"
+            config["test_size"] = args.test_size
+            config["val_size"] = args.val_size
+            with open(config_save_path, "w") as f:
+                json.dump(config, f, indent=2)
 
-        print(f"\nResults saved to: {config['results_dir']}")
-        print("Files created:")
-        print("  - cv_results.csv: Detailed fold results")
-        print("  - cv_summary.json: Summary statistics")
-        print("  - fold_X_predictions.json: Predictions per fold")
-        print("  - fold_X_best_model.pth: Best model per fold")
-        print("  - final_config.json: Final configuration used")
+            print(f"\nResults saved to: {config['results_dir']}")
+            print("Files created:")
+            print("  - final_model.pth: Trained final model")
+            print("  - final_model_results.json: Complete results and metrics")
+            print("  - final_test_predictions.json: Test set predictions")
+            print("  - training_history.json: Training progress")
+            print("  - final_config.json: Final configuration used")
+        else:
+            # Run cross-validation
+            print("Starting cross-validation...")
+            results_df = run_cross_validation(
+                carto_dataset=carto_dataset,
+                n_folds=config["n_folds"],
+                n_epochs=config["n_epochs"],
+                batch_size=config["batch_size"],
+                learning_rate=config["learning_rate"],
+                results_dir=config["results_dir"],
+                random_seed=config["random_seed"],
+            )
+
+            # Save final configuration
+            config_save_path = Path(config["results_dir"]) / "final_config.json"
+            config["training_mode"] = "cross_validation"
+            with open(config_save_path, "w") as f:
+                json.dump(config, f, indent=2)
+
+            print(f"\nResults saved to: {config['results_dir']}")
+            print("Files created:")
+            print("  - cv_results.csv: Detailed fold results")
+            print("  - cv_summary.json: Summary statistics")
+            print("  - fold_X_predictions.json: Predictions per fold")
+            print("  - fold_X_best_model.pth: Best model per fold")
+            print("  - final_config.json: Final configuration used")
 
         print("\n" + "=" * 60)
-        print("EXPERIMENT COMPLETED SUCCESSFULLY")
+        if args.final_model:
+            print("FINAL MODEL TRAINING COMPLETED SUCCESSFULLY")
+        else:
+            print("CROSS-VALIDATION EXPERIMENT COMPLETED SUCCESSFULLY")
         print("=" * 60)
 
     except Exception as e:
