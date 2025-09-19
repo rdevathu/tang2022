@@ -99,23 +99,30 @@ def create_architecture_diagram(
 
     # Input projection
     arrow_start = y_pos + spacing + box_height / 2
-    y_pos = add_box(
-        f"Input Projection\n(Conv1d: 8→{base_channels})", colors["conv"], y_pos
-    )
+    y_pos = add_box("Input Projection\n(Conv1d: 8→1)", colors["conv"], y_pos)
     add_arrow(arrow_start, y_pos + box_height / 2)
 
-    # Bottleneck blocks
-    for i in range(n_blocks):
+    # Bottleneck blocks with correct channel and kernel progression
+    block_configs = [
+        (1, 16, 7),  # Block 1
+        (16, 16, 7),  # Block 2
+        (16, 32, 5),  # Block 3
+        (32, 32, 5),  # Block 4
+        (32, 64, 3),  # Block 5
+        (64, 64, 3),  # Block 6
+    ]
+
+    for i, (in_ch, out_ch, kernel_size) in enumerate(block_configs):
         arrow_start = y_pos + spacing + box_height / 2
         y_pos = add_box(
-            f"Bottleneck Block {i + 1}\n(kernel_size=7,\nch1={base_channels}, ch2={base_channels})",
+            f"Bottleneck Block {i + 1}\n(kernel_size={kernel_size},\nch1={in_ch}, ch2={out_ch})",
             colors["bottleneck"],
             y_pos,
             height=1.8,
         )
         add_arrow(arrow_start, y_pos + 0.9)
 
-        # Add dropout after every 2 blocks (like in your image)
+        # Add dropout after every 2 blocks (like in paper image)
         if (i + 1) % 2 == 0 and i < n_blocks - 1:
             arrow_start = y_pos + 0.9 + spacing
             y_pos = add_box(
@@ -128,25 +135,25 @@ def create_architecture_diagram(
     y_pos = add_box("Global Avg Pooling", colors["pooling"], y_pos - 0.4)
     add_arrow(arrow_start, y_pos + box_height / 2)
 
-    # Channel aggregation (BN + ReLU + Dropout)
+    # 1D Convolution over channel dimension (as per Tang et al. 2022)
     arrow_start = y_pos + spacing + box_height / 2
     y_pos = add_box(
-        "Channel Aggregation\n(BatchNorm + ReLU)",
+        "1D Conv\n(kernel_size=1,\nin_channel=64,\nout_channel=128)\n\nBatch Norm\n\nReLU",
         colors["conv"],
         y_pos,
-        height=1.4,
+        height=2.8,
     )
-    add_arrow(arrow_start, y_pos + 0.7)
+    add_arrow(arrow_start, y_pos + 1.4)
 
     # Dropout
-    arrow_start = y_pos + 0.7 + spacing
-    y_pos = add_box("Dropout", colors["dropout"], y_pos - 0.3, height=0.8)
+    arrow_start = y_pos + 1.4 + spacing
+    y_pos = add_box("Dropout", colors["dropout"], y_pos - 0.7, height=0.8)
     add_arrow(arrow_start, y_pos + 0.4)
 
     # Final classifier
     arrow_start = y_pos + 0.4 + spacing
     y_pos = add_box(
-        f"FC + Sigmoid\n({base_channels}→1)",
+        "FC\nSigmoid\n(128→1)",
         colors["fc"],
         y_pos - 0.3,
         height=1.4,
