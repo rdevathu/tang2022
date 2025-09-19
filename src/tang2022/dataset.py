@@ -26,7 +26,7 @@ class ECGWindowDataset(Dataset):
                  target_fs: float = 200.0,
                  window_sec: float = 5.0,
                  overlap_sec: float = 4.0,
-                 pad_to_1024: bool = False):
+                 pad_to_1024: bool = True):
         """
         Initialize ECG window dataset.
         
@@ -111,7 +111,7 @@ class ECGWindowDataset(Dataset):
         
         # Convert to tensors
         window_tensor = torch.tensor(window, dtype=torch.float32)
-        label_tensor = torch.tensor(label, dtype=torch.long)
+        label_tensor = torch.tensor(label, dtype=torch.float32)
         
         return window_tensor, label_tensor, patient_id
     

@@ -92,7 +92,7 @@ class ECGNet(nn.Module):
     """
     
     def __init__(self, 
-                 in_channels: int = 12,  # 12 leads for CARTO data
+                 in_channels: int = 8,   # 8 independent leads (Tang et al. 2022)
                  base_channels: int = 64,
                  n_blocks: int = 6,
                  kernel_size: int = 7,
@@ -101,7 +101,7 @@ class ECGNet(nn.Module):
         Initialize ECG CNN.
         
         Args:
-            in_channels: Number of input ECG leads (12 for CARTO)
+            in_channels: Number of input ECG leads (8 independent leads per Tang et al. 2022)
             base_channels: Base number of channels for feature maps
             n_blocks: Number of bottleneck blocks (6 for ECG branch)
             kernel_size: Convolution kernel size
@@ -236,14 +236,14 @@ if __name__ == "__main__":
     # Test model architecture
     print("Testing ECG CNN architecture...")
     
-    # Create model
-    model = create_ecg_model('base', in_channels=12)
+    # Create model (8 independent channels per Tang et al. 2022)
+    model = create_ecg_model('base', in_channels=8)
     print(f"Model created with {count_parameters(model):,} trainable parameters")
     
     # Test with sample input
     batch_size = 4
     time_samples = 1000  # 5 seconds at 200 Hz
-    n_channels = 12      # 12 ECG leads
+    n_channels = 8       # 8 independent ECG leads (Tang et al. 2022)
     
     # Test both input formats
     print(f"\nTesting with input shape [B, T, C]: [{batch_size}, {time_samples}, {n_channels}]")

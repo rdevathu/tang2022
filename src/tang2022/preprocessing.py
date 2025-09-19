@@ -118,7 +118,11 @@ def create_windows(ecg_data: np.ndarray, fs: float = 200.0,
 
 def pad_window_to_1024(window: np.ndarray) -> np.ndarray:
     """
-    Pad window to 1024 samples with trailing zeros if needed.
+    Pad window to 1024 samples with trailing zeros as specified in Tang et al. 2022.
+    
+    The paper mentions: "the input EGM or ECG matrices were padded to length 1024 
+    in the time dimension with zeros to ensure that the max-pooling layers in the 
+    bottleneck blocks resulted in integer output lengths."
     
     Args:
         window: ECG window [n_samples, n_channels]
@@ -129,7 +133,7 @@ def pad_window_to_1024(window: np.ndarray) -> np.ndarray:
     if window.shape[0] >= 1024:
         return window[:1024, :]
     
-    # Pad with zeros
+    # Pad with zeros at the end
     padding = 1024 - window.shape[0]
     padded_window = np.pad(window, ((0, padding), (0, 0)), mode='constant', constant_values=0)
     
@@ -140,12 +144,12 @@ def preprocess_patient_ecg(ecg_data: np.ndarray, fs_original: float,
                           target_fs: float = 200.0,
                           filter_low: float = 0.05, filter_high: float = 100.0,
                           window_sec: float = 5.0, overlap_sec: float = 4.0,
-                          pad_to_1024: bool = False) -> List[np.ndarray]:
+                          pad_to_1024: bool = True) -> List[np.ndarray]:
     """
     Complete preprocessing pipeline for a single patient's ECG.
     
     Args:
-        ecg_data: ECG data [n_samples, n_channels] (all 12 leads for CARTO data)
+        ecg_data: ECG data [n_samples, n_channels] (8 independent leads per Tang et al. 2022)
         fs_original: Original sampling frequency in Hz
         target_fs: Target sampling frequency in Hz
         filter_low: Low cutoff frequency for band-pass filter

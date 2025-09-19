@@ -62,8 +62,9 @@ class CARTODataset:
         
         For each patient (MRN):
         1. Find all sinus rhythm ECGs
-        2. Identify ECGs closest to procedure date (prefer pre-ablation within 1 year)
-        3. Determine outcome label based on AF recurrence within max_days_to_recurrence
+        2. Validate ECG quality and filter out problematic ECGs (zero/flat leads)
+        3. Identify best valid ECG closest to procedure date (prefer pre-ablation within 1 year)
+        4. Determine outcome label based on AF recurrence within max_days_to_recurrence
         
         Returns:
             DataFrame with columns: mrn, ecg_index, label, acquisition_date, procedure_date
@@ -89,9 +90,21 @@ class CARTODataset:
         ).dt.days
         
         patient_records = []
+        validation_stats = {
+            'total_patients': 0,
+            'patients_with_valid_ecg': 0,
+            'patients_excluded_invalid_ecg': 0,
+            'total_ecgs_tested': 0,
+            'valid_ecgs': 0,
+            'invalid_ecgs': 0,
+            'zero_lead_ecgs': 0,
+            'flat_lead_ecgs': 0
+        }
         
         # Group by patient (MRN)
         for mrn, patient_ecgs in with_outcomes.groupby('mrn'):
+            validation_stats['total_patients'] += 1
+            
             # Determine outcome label
             af_recurrence = patient_ecgs['af_recurrence'].iloc[0]  # Should be same for all ECGs of a patient
             days_till_recurrence = patient_ecgs['days_till_af_recurrence'].iloc[0]
@@ -102,40 +115,98 @@ class CARTODataset:
             else:
                 label = 0  # No recurrence or recurrence beyond time window
             
-            # Find best ECG for this patient
-            # Prefer pre-procedure ECGs within 1 year, then closest to procedure
-            pre_procedure = patient_ecgs[patient_ecgs['days_to_procedure'] >= 0]
-            within_year = pre_procedure[pre_procedure['days_to_procedure'] <= 365]
+            # Sort ECGs by preference: pre-procedure within 1 year, then pre-procedure, then post-procedure
+            patient_ecgs_sorted = patient_ecgs.copy()
             
-            if len(within_year) > 0:
-                # Use closest pre-procedure ECG within 1 year
-                best_ecg = within_year.loc[within_year['days_to_procedure'].idxmin()]
-            elif len(pre_procedure) > 0:
-                # Use closest pre-procedure ECG (even if > 1 year)
-                best_ecg = pre_procedure.loc[pre_procedure['days_to_procedure'].idxmin()]
+            # Create priority score (lower is better)
+            def get_priority_score(row):
+                days = row['days_to_procedure']
+                if days >= 0 and days <= 365:  # Pre-procedure within 1 year
+                    return days  # Closer to procedure is better
+                elif days >= 0:  # Pre-procedure beyond 1 year
+                    return 365 + days
+                else:  # Post-procedure
+                    return 10000 + abs(days)
+            
+            patient_ecgs_sorted['priority'] = patient_ecgs_sorted.apply(get_priority_score, axis=1)
+            patient_ecgs_sorted = patient_ecgs_sorted.sort_values('priority')
+            
+            # Try to find a valid ECG, starting with highest priority
+            best_ecg_index = None
+            validation_info = None
+            
+            for _, ecg_row in patient_ecgs_sorted.iterrows():
+                validation_stats['total_ecgs_tested'] += 1
+                
+                # Load and validate ECG
+                ecg_index = int(ecg_row['index'])
+                ecg_data_12_lead = self.ecg_data[ecg_index]
+                
+                # Select 8 independent leads for validation
+                from .ecg_lead_selection import select_8_independent_leads
+                ecg_data_8_lead = select_8_independent_leads(ecg_data_12_lead, self.get_all_12_lead_names())
+                
+                # Validate ECG quality
+                from .ecg_validation import validate_ecg_quality
+                is_valid, quality_info = validate_ecg_quality(
+                    ecg_data_8_lead, 
+                    ['I', 'II', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+                )
+                
+                if is_valid:
+                    # Found a valid ECG
+                    best_ecg_index = ecg_index
+                    validation_info = quality_info
+                    validation_stats['valid_ecgs'] += 1
+                    break
+                else:
+                    # Track invalid ECG statistics
+                    validation_stats['invalid_ecgs'] += 1
+                    if quality_info['zero_leads']:
+                        validation_stats['zero_lead_ecgs'] += 1
+                    if quality_info['flat_leads']:
+                        validation_stats['flat_lead_ecgs'] += 1
+            
+            if best_ecg_index is not None:
+                # Found a valid ECG for this patient
+                validation_stats['patients_with_valid_ecg'] += 1
+                best_ecg = patient_ecgs_sorted[patient_ecgs_sorted['index'] == best_ecg_index].iloc[0]
+                
+                patient_records.append({
+                    'mrn': mrn,
+                    'ecg_index': best_ecg['index'],
+                    'label': label,
+                    'acquisition_date': best_ecg['acquisition_date'],
+                    'procedure_date': best_ecg['procedure_date'],
+                    'days_to_procedure': best_ecg['days_to_procedure'],
+                    'af_recurrence': af_recurrence,
+                    'days_till_af_recurrence': days_till_recurrence
+                })
             else:
-                # Use closest post-procedure ECG
-                best_ecg = patient_ecgs.loc[patient_ecgs['days_to_procedure'].abs().idxmin()]
-            
-            patient_records.append({
-                'mrn': mrn,
-                'ecg_index': best_ecg['index'],
-                'label': label,
-                'acquisition_date': best_ecg['acquisition_date'],
-                'procedure_date': best_ecg['procedure_date'],
-                'days_to_procedure': best_ecg['days_to_procedure'],
-                'af_recurrence': af_recurrence,
-                'days_till_af_recurrence': days_till_recurrence
-            })
+                # No valid ECG found for this patient
+                validation_stats['patients_excluded_invalid_ecg'] += 1
+                print(f"Warning: No valid ECG found for patient {mrn} - excluding from dataset")
         
         patient_df = pd.DataFrame(patient_records)
         
-        # Print summary statistics
-        print(f"\nPatient-level summary:")
-        print(f"Total patients: {len(patient_df)}")
-        print(f"Label distribution: {patient_df['label'].value_counts().to_dict()}")
-        print(f"Days to procedure - Mean: {patient_df['days_to_procedure'].mean():.1f}, "
-              f"Median: {patient_df['days_to_procedure'].median():.1f}")
+        # Print validation statistics
+        print(f"\nECG Validation Summary:")
+        print(f"  Total patients processed: {validation_stats['total_patients']}")
+        print(f"  Patients with valid ECG: {validation_stats['patients_with_valid_ecg']}")
+        print(f"  Patients excluded (no valid ECG): {validation_stats['patients_excluded_invalid_ecg']}")
+        print(f"  Total ECGs tested: {validation_stats['total_ecgs_tested']}")
+        print(f"  Valid ECGs: {validation_stats['valid_ecgs']}")
+        print(f"  Invalid ECGs: {validation_stats['invalid_ecgs']}")
+        print(f"    - ECGs with zero leads: {validation_stats['zero_lead_ecgs']}")
+        print(f"    - ECGs with flat leads: {validation_stats['flat_lead_ecgs']}")
+        
+        # Print patient-level summary
+        print(f"\nFinal Patient-level Dataset:")
+        print(f"  Total patients: {len(patient_df)}")
+        print(f"  Label distribution: {patient_df['label'].value_counts().to_dict()}")
+        if len(patient_df) > 0:
+            print(f"  Days to procedure - Mean: {patient_df['days_to_procedure'].mean():.1f}, "
+                  f"Median: {patient_df['days_to_procedure'].median():.1f}")
         
         return patient_df
     
@@ -148,7 +219,7 @@ class CARTODataset:
             
         Returns:
             Tuple of:
-            - ECG data [2500, 12] (all 12 leads)
+            - ECG data [2500, 8] (8 independent leads)
             - Label (0/1)
         """
         # Convert mrn to numeric if it's a string
@@ -166,9 +237,13 @@ class CARTODataset:
         ecg_index = int(patient_row['ecg_index'])
         label = int(patient_row['label'])
         
-        ecg_data = self.ecg_data[ecg_index]  # Shape: [2500, 12]
+        ecg_data_12_lead = self.ecg_data[ecg_index]  # Shape: [2500, 12]
         
-        return ecg_data, label
+        # Select 8 independent leads following Tang et al. 2022
+        from .ecg_lead_selection import select_8_independent_leads
+        ecg_data_8_lead = select_8_independent_leads(ecg_data_12_lead, self.get_all_12_lead_names())
+        
+        return ecg_data_8_lead, label
     
     def get_patient_ids(self) -> List[str]:
         """Get list of all patient MRNs."""
@@ -183,8 +258,12 @@ class CARTODataset:
         return 250.0
     
     def get_lead_names(self) -> List[str]:
-        """Get lead names for 12-lead ECG."""
-        # Standard 12-lead order
+        """Get lead names for 8 independent ECG leads (Tang et al. 2022)."""
+        # 8 independent leads as specified in Tang et al. 2022
+        return ['I', 'II', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
+    
+    def get_all_12_lead_names(self) -> List[str]:
+        """Get all 12 standard ECG lead names."""
         return ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']
     
     def create_tang_compatible_metadata(self, output_path: str):

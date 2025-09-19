@@ -385,8 +385,8 @@ def run_cross_validation(carto_dataset: CARTODataset,
         print(f"Train patients: {len(train_patients)}")
         print(f"Test patients: {len(test_patients)}")
         
-        # Create model
-        model = create_ecg_model('base', in_channels=12)
+        # Create model (8 independent channels per Tang et al. 2022)
+        model = create_ecg_model('base', in_channels=8)
         
         # Create data loaders
         augmentation = create_augmentation_pipeline(training=True)
