@@ -36,17 +36,17 @@ def load_config(config_path: str = None) -> dict:
         "learning_rate": 1e-3,
         "random_seed": 42,
         "model_size": "base",
-        "patience": 15
+        "patience": 15,
     }
-    
+
     if config_path and Path(config_path).exists():
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             user_config = json.load(f)
         default_config.update(user_config)
         print(f"Loaded configuration from {config_path}")
     else:
         print("Using default configuration")
-    
+
     return default_config
 
 
@@ -54,7 +54,7 @@ def create_default_config(output_path: str = "config.json"):
     """Create a default configuration file."""
     config = {
         "data_dir": "data",
-        "results_dir": "results", 
+        "results_dir": "results",
         "n_folds": 10,
         "n_epochs": 100,
         "batch_size": 32,
@@ -62,23 +62,23 @@ def create_default_config(output_path: str = "config.json"):
         "random_seed": 42,
         "model_size": "base",
         "patience": 15,
-        "description": "Configuration for Tang et al. 2022 ECG AF recurrence prediction"
+        "description": "Configuration for Tang et al. 2022 ECG AF recurrence prediction",
     }
-    
-    with open(output_path, 'w') as f:
+
+    with open(output_path, "w") as f:
         json.dump(config, f, indent=2)
-    
+
     print(f"Created default configuration file: {output_path}")
     return config
 
 
 def print_system_info():
     """Print system and environment information."""
-    import torch
     import numpy as np
     import pandas as pd
     import sklearn
-    
+    import torch
+
     print("System Information:")
     print(f"  Python: {sys.version}")
     print(f"  PyTorch: {torch.__version__}")
@@ -96,79 +96,90 @@ def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
         description="ECG AF Recurrence Prediction (Tang et al. 2022)",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    
+
     parser.add_argument(
-        "--config", "-c", type=str, default=None,
-        help="Path to configuration JSON file"
+        "--config",
+        "-c",
+        type=str,
+        default=None,
+        help="Path to configuration JSON file",
     )
-    
+
     parser.add_argument(
-        "--create-config", action="store_true",
-        help="Create default configuration file and exit"
+        "--create-config",
+        action="store_true",
+        help="Create default configuration file and exit",
     )
-    
+
     parser.add_argument(
-        "--test-run", action="store_true",
-        help="Run quick test with 2 folds and 3 epochs"
+        "--test-run",
+        action="store_true",
+        help="Run quick test with 2 folds and 3 epochs",
     )
-    
+
     parser.add_argument(
-        "--data-dir", type=str, default="data",
-        help="Directory containing CARTO dataset"
+        "--data-dir",
+        type=str,
+        default="data",
+        help="Directory containing CARTO dataset",
     )
-    
+
     parser.add_argument(
-        "--results-dir", type=str, default="results",
-        help="Directory to save results"
+        "--results-dir",
+        type=str,
+        default="results",
+        help="Directory to save results",
     )
-    
+
     args = parser.parse_args()
-    
+
     # Create config and exit if requested
     if args.create_config:
         create_default_config()
         return
-    
+
     # Print header
-    print("="*60)
+    print("=" * 60)
     print("ECG AF Recurrence Prediction (Tang et al. 2022)")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Print system info
     print_system_info()
     print()
-    
+
     # Load configuration
     config = load_config(args.config)
-    
+
     # Override with command line arguments
     if args.data_dir != "data":
         config["data_dir"] = args.data_dir
     if args.results_dir != "results":
         config["results_dir"] = args.results_dir
-    
+
     # Test run configuration
     if args.test_run:
         print("Running in TEST MODE (quick run)")
-        config.update({
-            "n_folds": 2,
-            "n_epochs": 3,
-            "batch_size": 16,
-            "results_dir": "test_results"
-        })
-    
+        config.update(
+            {
+                "n_folds": 2,
+                "n_epochs": 3,
+                "batch_size": 16,
+                "results_dir": "test_results",
+            }
+        )
+
     print("\nConfiguration:")
     for key, value in config.items():
         print(f"  {key}: {value}")
     print()
-    
+
     try:
         # Load CARTO dataset
         print("Loading CARTO dataset...")
         carto_dataset = load_carto_dataset(config["data_dir"])
-        
+
         # Print dataset statistics
         stats = carto_dataset.get_dataset_statistics()
         print("\nDataset Statistics:")
@@ -178,7 +189,7 @@ def main():
         print(f"  ECG shape: {stats['ecg_shape']}")
         print(f"  Sampling rate: {stats['sampling_rate']} Hz")
         print()
-        
+
         # Run cross-validation
         print("Starting cross-validation...")
         results_df = run_cross_validation(
@@ -188,26 +199,26 @@ def main():
             batch_size=config["batch_size"],
             learning_rate=config["learning_rate"],
             results_dir=config["results_dir"],
-            random_seed=config["random_seed"]
+            random_seed=config["random_seed"],
         )
-        
+
         # Save final configuration
         config_save_path = Path(config["results_dir"]) / "final_config.json"
-        with open(config_save_path, 'w') as f:
+        with open(config_save_path, "w") as f:
             json.dump(config, f, indent=2)
-        
+
         print(f"\nResults saved to: {config['results_dir']}")
         print("Files created:")
-        print(f"  - cv_results.csv: Detailed fold results")
-        print(f"  - cv_summary.json: Summary statistics")
-        print(f"  - fold_X_predictions.json: Predictions per fold")
-        print(f"  - fold_X_best_model.pth: Best model per fold")
-        print(f"  - final_config.json: Final configuration used")
-        
-        print("\n" + "="*60)
+        print("  - cv_results.csv: Detailed fold results")
+        print("  - cv_summary.json: Summary statistics")
+        print("  - fold_X_predictions.json: Predictions per fold")
+        print("  - fold_X_best_model.pth: Best model per fold")
+        print("  - final_config.json: Final configuration used")
+
+        print("\n" + "=" * 60)
         print("EXPERIMENT COMPLETED SUCCESSFULLY")
-        print("="*60)
-        
+        print("=" * 60)
+
     except Exception as e:
         print(f"\nERROR: {str(e)}")
         print("Experiment failed. Check the error message above.")
